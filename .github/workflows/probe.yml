@@ -1,0 +1,18 @@
+name: probe
+on: { push: { branches: [probe] } }
+jobs:
+  p:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          M=https://mirror.yandex.ru/archlinux32
+          echo "== repos"; curl -sSL $M/i686/ | grep -o 'href="[^"]*/"' | head -30
+          for r in testing staging core-testing extra-testing community-testing build-support; do
+            if curl -fsSL -o $r.db $M/i686/$r/$r.db 2>/dev/null; then echo "== $r"; tar -tzf $r.db 2>/dev/null | grep -E '^(fontconfig|pango|cairo|harfbuzz|libxft)-[0-9:]' | sort -u; fi
+          done
+          echo "== pool fontconfig/pango"
+          curl -sSL $M/pool/ | grep -oE '(fontconfig|pango)-[0-9][^"<>]*i686\.pkg\.tar\.(zst|xz)' | sort -u | head -40
+          echo "== pool-any"
+          curl -sSL $M/pool-any/ | grep -oE '(fontconfig)-[^"<>]*\.pkg\.tar\.(zst|xz)' | sort -u | head
+          echo "== archive?"
+          for u in https://archive.archlinux32.org/ https://archive.archlinux32.org/packages/p/pango/ https://archive.archlinux32.org/packages/f/fontconfig/; do echo "-- $u"; curl -sSL --max-time 20 $u | sed 's/<[^>]*>/ /g' | grep -E 'i686|pentium4|Index' | tail -25; done
