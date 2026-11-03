@@ -42,7 +42,7 @@ AR=https://archive.archlinux32.org/packages/f/fontconfig/
 FC=$(curl -fsSL --max-time 30 "$AR" | grep -oE 'fontconfig-2:[0-9.]+-[0-9.]+-i686\.pkg\.tar\.zst' | sort -uV | tail -1 || true)
 if [ -n "$FC" ]; then
   echo "fontconfig from archive: $FC"
-  curl -fsSL -o "$R/tmp/fc.pkg.tar.zst" "$AR${FC//:/%3A}" && arch-chroot "$R" pacman -U --noconfirm /tmp/fc.pkg.tar.zst && rm -f "$R/tmp/fc.pkg.tar.zst"
+  curl -fsSL -o "$R/root/fc.pkg.tar.zst" "$AR${FC//:/%3A}" && arch-chroot "$R" pacman -U --noconfirm /root/fc.pkg.tar.zst; rm -f "$R/root/fc.pkg.tar.zst"
 else echo "::warning::could not find fontconfig in the Arch Linux 32 archive"; fi
 
 # Catch library mismatches at build time instead of as a blank screen.
