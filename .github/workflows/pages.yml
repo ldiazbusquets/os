@@ -1,0 +1,113 @@
+name: Build the desktop and deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      rebuild:
+        description: "Rebuild the desktop with the newest packages (wipes saved machines)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: key
+        run: |
+          k="${{ hashFiles('build/arch/**', 'build/build-arch.sh', 'build/state.mjs') }}"
+          echo "key=${k:0:16}" >> "$GITHUB_OUTPUT"
+
+      # The built image lives in the "desktop-image" release so every deploy serves the same files,
+      # which keeps visitors' saved machines restorable. It is rebuilt only when the build files
+      # change or someone runs this workflow with "rebuild".
+      - name: Reuse the stored Arch image
+        id: reuse
+        if: ${{ !inputs.rebuild }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          f="arch-image-${{ steps.key.outputs.key }}.tar"
+          if gh release download desktop-image -R "$GITHUB_REPOSITORY" -p "$f" 2>/dev/null; then
+            tar -xf "$f" && rm "$f" && echo "hit=true" >> "$GITHUB_OUTPUT" && echo "reused $f"
+          else echo "no stored image for this build, building"; fi
+
+      - name: Build Arch Linux 32 image
+        if: steps.reuse.outputs.hit != 'true'
+        continue-on-error: true
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq python3-zstandard zstd
+          bash build/build-arch.sh arch-image
+
+      - name: Boot it once and save a snapshot
+        if: hashFiles('arch-image/fs.json') != '' && hashFiles('arch-image/state.bin.zst') == ''
+        continue-on-error: true
+        run: |
+          npm i --no-save --silent v86@0.5.473
+          node build/state.mjs arch-image v86
+
+      - name: Store the image for later deploys
+        if: steps.reuse.outputs.hit != 'true' && hashFiles('arch-image/state.bin.zst') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          f="arch-image-${{ steps.key.outputs.key }}.tar"
+          tar -cf "$f" arch-image
+          gh release view desktop-image -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create desktop-image -R "$GITHUB_REPOSITORY" --title "Desktop image" --notes "Built and used by the deploy workflow. Do not edit."
+          gh release upload desktop-image "$f" -R "$GITHUB_REPOSITORY" --clobber
+          for old in $(gh release view desktop-image -R "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' | grep -v "^$f$"); do gh release delete-asset desktop-image "$old" -R "$GITHUB_REPOSITORY" -y; done
+          rm "$f"
+
+      - name: Assemble site
+        run: |
+          mkdir _site
+          rsync -a --exclude _site --exclude .git --exclude .github --exclude build --exclude arch-image --exclude node_modules ./ _site/
+          if [ -f arch-image/fs.json ]; then cp -r arch-image _site/arch; fi
+          touch _site/.nojekyll
+          du -sh _site; ls _site _site/arch 2>/dev/null | head -20
+
+      - name: Test the page in a real browser
+        if: hashFiles('_site/arch/fs.json') != ''
+        continue-on-error: true
+        run: |
+          npm i --no-save --silent playwright@1.56.1
+          npx playwright install --with-deps chromium > /dev/null
+          (cd _site && python3 -m http.server 8000 > /dev/null 2>&1 &)
+          sleep 1
+          timeout 25m node build/test-page.mjs http://localhost:8000/
+
+      - name: Publish test screenshots
+        if: always() && hashFiles('shot-*.png') != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view previews -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create previews -R "$GITHUB_REPOSITORY" --title "Test screenshots" --notes "Screenshots from the last browser test." --prerelease
+          gh release upload previews shot-*.png -R "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

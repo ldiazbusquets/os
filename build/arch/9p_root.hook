@@ -1,0 +1,13 @@
+#!/usr/bin/ash
+# v86: the root filesystem is the 9p share "host9p" served by the emulator
+run_hook() {
+    mount_handler="mount_9p_root"
+}
+
+mount_9p_root() {
+    msg ":: mounting '$root' on real root (9p)"
+    if ! mount -t 9p host9p "$1" -o trans=virtio,version=9p2000.L,cache=loose,rw; then
+        echo "Could not mount the 9p root. Dropping to a shell."
+        launch_interactive_shell
+    fi
+}

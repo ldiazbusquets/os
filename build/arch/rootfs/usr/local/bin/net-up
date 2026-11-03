@@ -1,0 +1,12 @@
+#!/bin/bash
+# Get an address from the emulator's virtual router (needs Network on in the page).
+iface=$(ls /sys/class/net | grep -v '^lo$' | head -1)
+if [ -z "$iface" ]; then echo "No network card found."; exit 1; fi
+echo "Asking for an address on $iface..."
+sudo ip link set "$iface" up
+if sudo dhcpcd -4 -w -t 20 -q "$iface"; then
+  ip -4 -brief addr show "$iface"
+  echo "Connected. Try: curl -I http://example.com"
+else
+  echo "No reply. Is Network turned on in the top bar?"
+fi

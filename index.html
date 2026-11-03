@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OS</title>
+<meta name="description" content="A full Arch Linux desktop (XFCE) running inside your browser. Nothing can touch your computer.">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta property="og:type" content="website">
+<meta property="og:title" content="OS | LDB Lab">
+<meta property="og:description" content="A full Arch Linux desktop running in your browser. Windows, files, apps; break anything and reset.">
+<meta property="og:image" content="https://ldiazbusquets.github.io/os/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+:root{color-scheme:dark;--fg:#c9d1d9;--dim:#7d8590;--line:rgba(255,255,255,.12);--panel:rgba(14,17,22,.92);--acc:#7ca9d4;
+ --sans:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+*{box-sizing:border-box}[hidden]{display:none!important}
+html,body{width:100%;height:100%;margin:0;background:#000;color:var(--fg);font:14px/1.45 var(--sans)}
+body{overflow:hidden}
+#screen{position:fixed;inset:0;display:grid;place-items:center;background:#000}
+#screen canvas{display:block;width:min(100vw,calc(100vh * var(--ar,1.7778)))!important;height:auto!important;image-rendering:auto;cursor:none}
+#screen canvas.free{cursor:default}
+#screen > div{display:none!important}  /* v86 text-mode layer: the desktop is graphical */
+.load{position:fixed;inset:0;display:grid;place-items:center;background:#000;z-index:5;text-align:center;padding:24px}
+.load b{display:block;font-weight:500;font-size:15px;color:#fff;margin-bottom:6px}
+.load span{color:var(--dim);font-size:13px}
+.bar{width:min(280px,60vw);height:2px;background:#1c2128;border-radius:2px;overflow:hidden;margin:16px auto 0}.bar>div{height:100%;width:0;background:var(--acc);transition:width .3s}
+.hint{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:12;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-size:13px;color:var(--fg);pointer-events:none;transition:opacity .4s;backdrop-filter:blur(10px)}
+.hot{position:fixed;top:0;right:0;width:160px;height:56px;z-index:14}
+.menubtn{position:fixed;top:8px;right:10px;z-index:15;height:28px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg);font:13px var(--sans);cursor:pointer;opacity:0;transition:opacity .2s;backdrop-filter:blur(10px)}
+.menubtn:focus-visible,.hot:hover~.menubtn,.menubtn:hover,.menubtn.open{opacity:1}
+.panel{position:fixed;z-index:20;top:42px;right:10px;width:min(400px,calc(100vw - 20px));max-height:calc(100vh - 56px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:0 20px 60px rgba(0,0,0,.6);backdrop-filter:blur(14px)}
+.panel h4{margin:12px 0 4px;font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+.panel p{margin:0 0 8px}.panel a{color:var(--acc)}.k{color:#a9c8e6;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+.mrow{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 4px}
+.mb{font:13px var(--sans);color:var(--fg);background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:8px;padding:5px 10px;cursor:pointer}
+.mb:hover:not(:disabled){border-color:var(--acc);color:#fff}.mb:disabled{opacity:.4;cursor:default}.mb.on{border-color:var(--acc);color:#a9c8e6}
+.stat{color:var(--dim);margin:8px 0 0;font-size:12px}
+.opt{display:flex;gap:8px;align-items:flex-start;padding:6px 0;cursor:pointer}.opt input{accent-color:var(--acc);margin-top:3px}.opt b{color:#fff;font-weight:500}.opt span{display:block;color:var(--dim);font-size:12.5px}
+.panel input[type=text]{width:100%;margin-top:4px;background:#000;border:1px solid var(--line);border-radius:6px;color:#fff;font:12.5px ui-monospace,Menlo,monospace;padding:5px 7px}
+table{border-collapse:collapse;width:100%;font-size:13px}td{padding:2px 0;vertical-align:top}td:first-child{color:#a9c8e6;padding-right:12px;white-space:nowrap}
+.toast{position:fixed;right:10px;bottom:10px;z-index:30;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;color:#fff;font-size:13px;max-width:calc(100vw - 20px);backdrop-filter:blur(10px)}
+</style>
+</head>
+<body>
+<div id="screen"><div></div><canvas></canvas></div>
+<div class="load" id="load"><div><b id="loadT">Starting the desktop</b><span id="loadS">Loading the emulator…</span><div class="bar"><div id="barf"></div></div></div></div>
+<div class="hint" id="hint" hidden>Click the desktop to use the mouse &middot; Esc gives it back</div>
+<div class="hot" aria-hidden="true"></div>
+<button class="menubtn" id="menuBtn" title="Menu (Ctrl+Alt+M)">menu</button>
+
+<div class="panel" id="menu" hidden>
+  <div class="mrow">
+    <button class="mb" id="bSave">Save</button>
+    <button class="mb" id="bReset">Reset</button>
+    <button class="mb" id="bNet">Network</button>
+    <button class="mb" id="bFull">Full screen</button>
+    <button class="mb" id="bCAD" title="Send Ctrl+Alt+Del">Ctrl+Alt+Del</button>
+    <button class="mb" id="bHelp">Help</button>
+  </div>
+  <div id="netBox" hidden>
+    <h4>Network</h4>
+    <label class="opt"><input type="radio" name="net" value="off"><div><b>Off</b><span>Offline. The package lists are built in, so searching still works.</span></div></label>
+    <label class="opt"><input type="radio" name="net" value="fetch"><div><b>Web, HTTP only</b><span>Through your browser. Plain http:// pages that allow it load; HTTPS and pacman downloads don&rsquo;t.</span></div></label>
+    <label class="opt"><input type="radio" name="net" value="wisp"><div><b>Relay, full internet</b><span>Real connections through a Wisp relay, so pacman -S and HTTPS work. Traffic passes through whoever runs it.</span>
+      <input type="text" id="wispUrl" placeholder="wss://your-relay.example/" spellcheck="false" autocomplete="off"></div></label>
+    <div class="mrow"><button class="mb on" id="netApply">Apply</button><button class="mb" id="netCancel">Cancel</button></div>
+    <p style="color:var(--dim);font-size:12.5px">Then open a terminal and run <span class="k">net-up</span>.</p>
+  </div>
+  <div id="helpBox" hidden>
+    <h4>About</h4>
+    <p>Arch Linux 32 with the XFCE desktop, on an emulated PC running in this tab. Nothing in it can touch your computer.</p>
+    <p>User <span class="k">arch</span>, password <span class="k">arch</span> (sudo). root&rsquo;s password is <span class="k">root</span>.</p>
+    <p><b style="font-weight:500;color:#fff">Save</b> keeps the whole machine, open windows included, in this browser. <b style="font-weight:500;color:#fff">Reset</b> wipes it.</p>
+    <h4>Using it</h4>
+    <table>
+      <tr><td>Click</td><td>use the mouse inside</td></tr>
+      <tr><td>Esc</td><td>get your mouse back</td></tr>
+      <tr><td>Full screen</td><td>keyboard goes fully to Linux</td></tr>
+      <tr><td>Ctrl+Alt+M</td><td>this menu</td></tr>
+    </table>
+    <h4>Honest limits</h4>
+    <p style="color:var(--dim);font-size:12.5px">It&rsquo;s a 32-bit PC imitated in software with no graphics card, so it&rsquo;s slower than a real computer: apps take a few seconds to open and there are no visual effects. For a fast console, use the <a href="/linux/">terminal version</a>.</p>
+    <p style="color:var(--dim);font-size:12.5px">Built with <a href="https://github.com/copy/v86">v86</a> (BSD), <a href="https://archlinux32.org/">Arch Linux 32</a> packages (own licences) and <a href="https://xfce.org/">XFCE</a>. Not affiliated with Arch Linux. <a href="/lab/">LDB Lab</a></p>
+  </div>
+  <p class="stat" id="stat">starting</p>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="v86/libv86.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var Q = new URLSearchParams(location.search);
+  var ARCH = Q.get('arch') || 'arch/';
+  // Keep in sync with build/state.mjs: a snapshot only restores on identical hardware.
+  var CMDLINE = 'rw root=host9p rootfstype=9p rootflags=trans=virtio,cache=loose console=ttyS0 video=1280x720 init_on_free=on spectre_v2=off pti=off quiet loglevel=3';
+  var HW = { memory_size: 768 * 1024 * 1024, vga_memory_size: 8 * 1024 * 1024 };
+  var DB = 'ldb-os', STORE = 'saves', KEY = 'os';
+  var emu = null, build = null, net = loadNet(), ready = false, busy = false, booted = false;
+  var canvas = document.querySelector('#screen canvas');
+
+  /* ---------- ui ---------- */
+  var statText = 'starting';
+  function status(s) { statText = s; $('stat').textContent = s + ' · i686 · 768 MB · ' + netText(); }
+  function loadMsg(t, s, pct) { if (t) $('loadT').textContent = t; if (s != null) $('loadS').textContent = s; if (pct != null) $('barf').style.width = Math.round(pct * 100) + '%'; }
+  var toastT;
+  function toast(s, ms) { var t = $('toast'); t.textContent = s; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { t.hidden = true; }, ms || 3500); }
+  function buttons() { $('bSave').disabled = $('bReset').disabled = $('bNet').disabled = $('bCAD').disabled = !ready || busy; }
+  function fmtMB(n) { return (n / 1048576).toFixed(0) + ' MB'; }
+  function toggleMenu(force) {
+    var open = force != null ? force : $('menu').hidden;
+    $('menu').hidden = !open; $('menuBtn').classList.toggle('open', open);
+    if (!open) $('netBox').hidden = $('helpBox').hidden = true;
+  }
+  $('menuBtn').onclick = function () { toggleMenu(); };
+  document.addEventListener('pointerdown', function (e) { if (!$('menu').hidden && !e.target.closest('#menu,#menuBtn')) toggleMenu(false); });
+  addEventListener('keydown', function (e) { if (e.ctrlKey && e.altKey && e.code === 'KeyM') { toggleMenu(); e.preventDefault(); e.stopPropagation(); } }, true);
+  $('bHelp').onclick = function () { $('helpBox').hidden = !$('helpBox').hidden; $('netBox').hidden = true; };
+
+  function up(how) {
+    if (booted) return; booted = true;
+    $('load').hidden = true; buttons(); status('running' + (how ? ', ' + how : ''));
+    $('hint').hidden = false; setTimeout(function () { $('hint').style.opacity = 0; }, 6000);
+  }
+  // keep the canvas aspect ratio in CSS when Linux changes resolution
+  new MutationObserver(function () { if (canvas.width && canvas.height) document.documentElement.style.setProperty('--ar', (canvas.width / canvas.height).toFixed(4)); })
+    .observe(canvas, { attributes: true, attributeFilter: ['width', 'height'] });
+
+  /* ---------- mouse capture ---------- */
+  canvas.addEventListener('click', function () { if (emu && ready && document.pointerLockElement !== canvas) { emu.lock_mouse(); } });
+  document.addEventListener('pointerlockchange', function () { canvas.classList.toggle('free', document.pointerLockElement !== canvas); });
+
+  /* ---------- saves (IndexedDB, gzip) ---------- */
+  function idb() { return new Promise(function (ok, no) { var r = indexedDB.open(DB, 1); r.onupgradeneeded = function () { r.result.createObjectStore(STORE); }; r.onsuccess = function () { ok(r.result); }; r.onerror = function () { no(r.error); }; }); }
+  function idbDo(m, fn) { return idb().then(function (db) { return new Promise(function (ok, no) { var tx = db.transaction(STORE, m), r = fn(tx.objectStore(STORE)); tx.oncomplete = function () { ok(r && r.result); }; tx.onerror = tx.onabort = function () { no(tx.error); }; }); }); }
+  function getSave() { return idbDo('readonly', function (s) { return s.get(KEY); }).catch(function () { return null; }); }
+  function gz(buf, how) { var S = how === 'c' ? new CompressionStream('gzip') : new DecompressionStream('gzip'); return new Response(new Blob([buf]).stream().pipeThrough(S)).arrayBuffer(); }
+  function save() {
+    if (!ready || busy) return; busy = true; buttons(); status('saving'); toast('Saving the machine…', 120000);
+    emu.save_state().then(function (st) { return gz(st, 'c'); })
+      .then(function (z) { return idbDo('readwrite', function (s) { return s.put({ when: Date.now(), build: build && build.built, size: z.byteLength, data: z }, KEY); }).then(function () { return z; }); })
+      .then(function (z) { toast('Saved (' + fmtMB(z.byteLength) + '). It comes back next time you open this page.'); status('running, saved'); })
+      .catch(function (e) { toast('Could not save: ' + (e && e.message || e), 6000); status('running'); })
+      .then(function () { busy = false; buttons(); });
+  }
+  var resetArmed = 0;
+  function reset() {
+    if (!ready || busy) return;
+    if (Date.now() - resetArmed > 4000) { resetArmed = Date.now(); toast('Press Reset again to wipe this machine', 4000); return; }
+    busy = true; buttons(); status('resetting');
+    idbDo('readwrite', function (s) { return s.delete(KEY); }).catch(function () {}).then(function () { location.reload(); });
+  }
+  $('bSave').onclick = save;
+  $('bReset').onclick = reset;
+  $('bCAD').onclick = function () { if (emu && ready) emu.keyboard_send_scancodes([0x1D, 0x38, 0xE0, 0x53, 0xE0, 0xD3, 0xB8, 0x9D]); toggleMenu(false); };
+  $('bFull').onclick = function () {
+    var d = document.documentElement; toggleMenu(false);
+    if (document.fullscreenElement) { document.exitFullscreen(); return; }
+    if (d.requestFullscreen) d.requestFullscreen().then(function () { if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock().catch(function () {}); }).catch(function () {});
+  };
+
+  /* ---------- network ---------- */
+  function loadNet() { try { return JSON.parse(localStorage.getItem('os.net')) || { mode: 'off', wisp: '' }; } catch (e) { return { mode: 'off', wisp: '' }; } }
+  function netText() { return net.mode === 'off' ? 'network off' : net.mode === 'fetch' ? 'network: http' : 'network: relay'; }
+  function netDevice() {
+    var d = { type: 'virtio' };
+    if (net.mode === 'fetch') d.relay_url = 'fetch';
+    if (net.mode === 'wisp' && /^wss?:\/\//.test(net.wisp)) d.relay_url = net.wisp;
+    return d;
+  }
+  $('bNet').onclick = function () {
+    document.querySelectorAll('input[name=net]').forEach(function (r) { r.checked = r.value === net.mode; });
+    $('wispUrl').value = net.wisp || ''; $('netBox').hidden = !$('netBox').hidden; $('helpBox').hidden = true;
+  };
+  $('netCancel').onclick = function () { $('netBox').hidden = true; };
+  $('netApply').onclick = function () {
+    var m = (document.querySelector('input[name=net]:checked') || {}).value || 'off', w = $('wispUrl').value.trim();
+    if (m === 'wisp' && !/^wss?:\/\//.test(w)) { toast('Enter a relay address starting with wss://'); return; }
+    var changed = m !== net.mode || (m === 'wisp' && w !== net.wisp);
+    net = { mode: m, wisp: w }; try { localStorage.setItem('os.net', JSON.stringify(net)); } catch (e) {}
+    $('bNet').classList.toggle('on', net.mode !== 'off'); toggleMenu(false); status(statText);
+    if (changed && ready) rewire();
+  };
+  // The network backend is fixed when the emulator is created: snapshot, rebuild, resume.
+  function rewire() {
+    busy = true; buttons(); status('switching network'); toast('Switching network…', 60000);
+    emu.save_state().then(function (st) {
+      ready = false;
+      return emu.destroy().then(function () { return start({ initial_state: { buffer: st } }); });
+    }).then(function () { toast(net.mode === 'off' ? 'Network off' : 'Network on. Open a terminal and run net-up', 5000); status('running'); })
+      .catch(function (e) { toast('Network switch failed: ' + (e && e.message || e), 6000); status('error'); })
+      .then(function () { busy = false; buttons(); });
+  }
+
+  /* ---------- boot ---------- */
+  function start(extra) {
+    var c = {
+      wasm_path: 'v86/v86.wasm', bios: { url: 'v86/seabios.bin' }, vga_bios: { url: 'v86/vgabios.bin' },
+      memory_size: HW.memory_size, vga_memory_size: HW.vga_memory_size, net_device: netDevice(),
+      filesystem: { basefs: { url: ARCH + 'fs.json' }, baseurl: ARCH + 'flat/' },
+      bzimage_initrd_from_filesystem: true, cmdline: CMDLINE,
+      screen_container: $('screen'), autostart: true, disable_speaker: true
+    };
+    for (var k in extra) c[k] = extra[k];
+    return new Promise(function (ok, no) {
+      try { emu = new V86(c); } catch (e) { return no(e); }
+      emu.add_listener('download-progress', function (p) {
+        if (booted || !p.file_name || !p.lengthComputable) return;
+        if (/state/.test(p.file_name)) loadMsg(null, 'Downloading the running desktop… ' + fmtMB(p.loaded) + ' of ' + fmtMB(p.total), .05 + .9 * p.loaded / p.total);
+      });
+      emu.add_listener('emulator-ready', function () { ready = true; ok(); });
+    });
+  }
+
+  function boot() {
+    return Promise.all([getSave(), fetch(ARCH + 'state.bin.zst', { method: 'HEAD' }).then(function (r) { return r.ok; }).catch(function () { return false; })]).then(function (r) {
+      var s = r[0], hasState = r[1];
+      if (s && s.build && build && s.build !== build.built) { toast('The desktop was rebuilt since your save (' + s.build + '), so this is a fresh one.', 7000); s = null; }
+      if (s && s.data) {
+        loadMsg('Restoring your desktop', 'Unpacking your save…', .4);
+        return gz(s.data, 'd').then(function (st) { return start({ initial_state: { buffer: st } }); })
+          .then(function () { up('your save from ' + new Date(s.when).toLocaleDateString()); });
+      }
+      if (hasState) {
+        loadMsg('Starting the desktop', 'Downloading the running desktop…', .05);
+        return start({ initial_state: { url: ARCH + 'state.bin.zst' } }).then(function () { up(); });
+      }
+      loadMsg('Booting Linux', 'Starting from scratch, this takes a few minutes…', .5);
+      return start({}).then(function () { status('booting'); setTimeout(function () { up(); }, 4000); });
+    });
+  }
+
+  window.__os = { save: save, get emu() { return emu; }, get ready() { return ready; }, get booted() { return booted; }, canvas: canvas };
+  status('starting'); buttons(); $('bNet').classList.toggle('on', net.mode !== 'off');
+  fetch(ARCH + 'build.json', { cache: 'no-cache' }).then(function (r) { if (!r.ok) throw new Error('nobuild'); return r.json(); })
+    .then(function (b) { build = b; return boot(); }, function () {
+      loadMsg('The desktop is still being built', 'Building a whole Linux desktop takes about an hour on GitHub. Meanwhile, try the terminal version at /linux/.', 1);
+      status('not built yet');
+    })
+    .catch(function (e) { console.error(e); loadMsg('Could not start', String(e && e.message || e), 1); status('error'); });
+})();
+</script>
+</body>
+</html>

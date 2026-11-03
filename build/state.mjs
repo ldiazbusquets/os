@@ -1,0 +1,51 @@
+// Boots the built Arch desktop once in Node and saves a snapshot once XFCE is on screen,
+// so the page can resume a running desktop instead of booting from scratch.
+// Usage: node build/state.mjs ARCH_DIR V86_DIR   (writes ARCH_DIR/state.bin.zst)
+import { V86 } from "v86";
+import fs from "node:fs";
+import path from "node:path";
+import url from "node:url";
+import { execFileSync } from "node:child_process";
+
+const [dir, biosDir] = process.argv.slice(2).map(p => path.resolve(p));
+const wasm = path.join(path.dirname(url.fileURLToPath(import.meta.resolve("v86"))), "v86.wasm");
+// Keep in sync with HW in index.html: a snapshot only restores on identical hardware.
+const emu = new V86({
+  wasm_path: wasm,
+  bios: { url: path.join(biosDir, "seabios.bin") },
+  vga_bios: { url: path.join(biosDir, "vgabios.bin") },
+  memory_size: 768 * 1024 * 1024,
+  vga_memory_size: 8 * 1024 * 1024,
+  net_device: { type: "virtio" },
+  filesystem: { basefs: { url: path.join(dir, "fs.json") }, baseurl: path.join(dir, "flat") + "/" },
+  bzimage_initrd_from_filesystem: true,
+  cmdline: "rw root=host9p rootfstype=9p rootflags=trans=virtio,cache=loose console=ttyS0 video=1280x720 init_on_free=on spectre_v2=off pti=off quiet loglevel=3",
+  autostart: true,
+  screen_dummy: true,
+  disable_speaker: true,
+});
+
+const t0 = Date.now(), secs = () => ((Date.now() - t0) / 1000).toFixed(0) + "s";
+let out = "", stage = 0;
+emu.add_listener("serial0-output-byte", b => {
+  const c = String.fromCharCode(b);
+  process.stdout.write(c);
+  out = (out + c).slice(-4000);
+  if (stage === 0 && out.includes("GUI_READY")) {
+    stage = 1;
+    console.error(`\n== desktop up after ${secs()}, letting it settle`);
+    setTimeout(() => emu.serial0_send("pgrep -a Xorg; pgrep -a xfwm4; pgrep -a xfce4-panel; pgrep -a xfdesktop; cat /sys/class/graphics/fb0/virtual_size; free -m; sync; echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null; echo LDB_READY_$((6*7))\n"), 60000);
+  }
+  if (stage === 1 && out.includes("LDB_READY_42")) {
+    stage = 2;
+    setTimeout(async () => {
+      const st = new Uint8Array(await emu.save_state());
+      const raw = path.join(dir, "state.bin");
+      fs.writeFileSync(raw, st);
+      execFileSync("zstd", ["-15", "--long=27", "-f", "-q", "--rm", raw, "-o", raw + ".zst"], { stdio: "inherit" });
+      console.error(`== snapshot ${(st.length / 1e6).toFixed(0)} MB raw, ${(fs.statSync(raw + ".zst").size / 1e6).toFixed(1)} MB compressed, at ${secs()}`);
+      process.exit(0);
+    }, 3000);
+  }
+});
+setTimeout(() => { console.error("\n== timed out waiting for the desktop; Xorg log follows"); emu.serial0_send("cat /tmp/xorg.log | tail -40; echo; ls -la /dev/fb* /dev/dri; lsmod | grep -i bochs\n"); setTimeout(() => process.exit(1), 20000); }, 40 * 60 * 1000);
