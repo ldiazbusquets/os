@@ -48,4 +48,8 @@ emu.add_listener("serial0-output-byte", b => {
     }, 3000);
   }
 });
-setTimeout(() => { console.error("\n== timed out waiting for the desktop; Xorg log follows"); emu.serial0_send("cat /tmp/xorg.log | tail -40; echo; ls -la /dev/fb* /dev/dri; lsmod | grep -i bochs\n"); setTimeout(() => process.exit(1), 20000); }, 40 * 60 * 1000);
+setTimeout(() => {
+  console.error("\n== timed out waiting for the desktop; diagnostics follow");
+  emu.serial0_send("for f in ~/.local/share/xorg/Xorg.0.log.old ~/.local/share/xorg/Xorg.0.log; do echo \"--- $f\"; grep -E '\\(EE\\)|\\(WW\\)|Fatal|fbdev|FBDEV|Using|Loading' $f | head -60; done; echo '--- xorg.log'; tail -30 /tmp/xorg.log; echo '--- journal'; journalctl -b --no-pager -p warning | tail -40; ls -la /dev/fb0 /dev/dri/card0; id\n");
+  setTimeout(() => process.exit(1), 60000);
+}, 15 * 60 * 1000);

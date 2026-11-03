@@ -53,6 +53,7 @@ jobs:
           bash build/build-arch.sh arch-image
 
       - name: Boot it once and save a snapshot
+        id: state
         if: hashFiles('arch-image/fs.json') != '' && hashFiles('arch-image/state.bin.zst') == ''
         continue-on-error: true
         run: |
@@ -60,7 +61,7 @@ jobs:
           node build/state.mjs arch-image v86
 
       - name: Store the image for later deploys
-        if: steps.reuse.outputs.hit != 'true' && hashFiles('arch-image/state.bin.zst') != ''
+        if: always() && hashFiles('arch-image/fs.json') != '' && (steps.reuse.outputs.hit != 'true' || steps.state.outcome == 'success')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
