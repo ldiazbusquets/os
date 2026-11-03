@@ -35,6 +35,19 @@ cp /tmp/pacman32.conf "$R/etc/pacman.conf"; cp /tmp/mirrorlist32 "$R/etc/pacman.
 sed -i 's#Include = /tmp/mirrorlist32#Include = /etc/pacman.d/mirrorlist#' "$R/etc/pacman.conf"
 for p in fastfetch xfce4-taskmanager xfce4-screenshooter galculator gnome-themes-extra netsurf dillo unzip zip cowsay; do arch-chroot "$R" pacman -S --noconfirm --needed "$p" >/dev/null 2>&1 && echo "added $p" || echo "skipped $p"; done
 
+# Arch Linux 32 published pango/cairo built against fontconfig 2.18 but its repos still carry 2.14,
+# which breaks every GTK app (undefined symbol FcConfigSetDefaultSubstitute). Take the matching
+# fontconfig build from the Arch Linux 32 archive.
+AR=https://archive.archlinux32.org/packages/f/fontconfig/
+FC=$(curl -fsSL --max-time 30 "$AR" | grep -oE 'fontconfig-2:[0-9.]+-[0-9.]+-i686\.pkg\.tar\.zst' | sort -uV | tail -1 || true)
+if [ -n "$FC" ]; then
+  echo "fontconfig from archive: $FC"
+  curl -fsSL -o "$R/tmp/fc.pkg.tar.zst" "$AR${FC//:/%3A}" && arch-chroot "$R" pacman -U --noconfirm /tmp/fc.pkg.tar.zst && rm -f "$R/tmp/fc.pkg.tar.zst"
+else echo "::warning::could not find fontconfig in the Arch Linux 32 archive"; fi
+
+# Catch library mismatches at build time instead of as a blank screen.
+arch-chroot "$R" bash -c 'for b in /usr/bin/xfce4-session /usr/bin/xfwm4 /usr/bin/xfce4-panel /usr/bin/xfdesktop /usr/bin/thunar /usr/bin/xfce4-terminal /usr/bin/mousepad /usr/bin/ristretto /usr/bin/xfce4-appfinder /usr/bin/xfsettingsd /usr/bin/dillo /usr/bin/galculator /usr/lib/libgtk-3.so.0 /usr/lib/libpangoft2-1.0.so.0 /usr/lib/libcairo.so.2; do [ -e "$b" ] || { echo "abi: missing $b"; continue; }; u=$(ldd -r "$b" 2>&1 | grep -E "undefined symbol|not found" | head -3); [ -n "$u" ] && echo "abi: $b: $u" || echo "abi: ok $b"; done'
+
 # overlay files and system setup
 cp -a --no-preserve=ownership "$B/rootfs/." "$R/"
 chown -R root:root "$R/etc/sudoers.d" "$R/usr/local/bin" "$R/etc/systemd/system" "$R/etc/X11" "$R/etc/modules-load.d" "$R/etc/locale.conf" "$R/etc/hostname" "$R/usr/share/backgrounds/ldb"
