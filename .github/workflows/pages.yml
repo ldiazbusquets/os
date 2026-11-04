@@ -58,7 +58,11 @@ jobs:
         continue-on-error: true
         run: |
           npm i --no-save --silent v86@0.5.473
-          node build/state.mjs arch-image v86
+          for try in 1 2 3; do
+            echo "== boot attempt $try"
+            if node build/state.mjs arch-image v86; then exit 0; fi
+          done
+          exit 1
 
       - name: Store the image for later deploys
         if: always() && hashFiles('arch-image/fs.json') != '' && (steps.reuse.outputs.hit != 'true' || steps.state.outcome == 'success')

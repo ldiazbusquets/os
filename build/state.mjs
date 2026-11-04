@@ -32,6 +32,7 @@ emu.add_listener("serial0-output-byte", b => {
   const c = String.fromCharCode(b);
   process.stdout.write(c);
   out = (out + c).slice(-4000);
+  if (stage < 1 && /Kernel panic|end trace 0000/.test(out)) { console.error(`\n== kernel crashed at ${secs()}, giving up on this boot`); process.exit(3); }
   if (stage === 0 && out.includes("GUI_READY")) {
     stage = 0.5;
     console.error(`\n== X is up after ${secs()}; waiting for XFCE to paint the screen`);
@@ -63,4 +64,4 @@ setTimeout(() => {
   console.error("\n== timed out waiting for the desktop; diagnostics follow");
   emu.serial0_send("for f in ~/.local/share/xorg/Xorg.0.log.old ~/.local/share/xorg/Xorg.0.log; do echo \"--- $f\"; grep -E '\\(EE\\)|\\(WW\\)|Fatal|fbdev|FBDEV|Using|Loading' $f | head -60; done; echo '--- xorg.log'; tail -30 /tmp/xorg.log; echo '--- journal'; journalctl -b --no-pager -p warning | tail -40; ls -la /dev/fb0 /dev/dri/card0; id\n");
   setTimeout(() => process.exit(1), 60000);
-}, 30 * 60 * 1000);
+}, 25 * 60 * 1000);
