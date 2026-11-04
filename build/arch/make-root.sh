@@ -30,7 +30,7 @@ printf 'MODULES=(virtio_pci virtio_net 9p 9pnet 9pnet_virtio)\nBINARIES=()\nFILE
 printf "PRESETS=('default')\nALL_kver='/boot/vmlinuz-linux'\ndefault_image='/boot/initramfs-linux.img'\n" > "$R/etc/mkinitcpio.d/linux.preset"
 
 pacstrap -C /tmp/pacman32.conf -M -G "$R" base linux mkinitcpio sudo nano vim less man-db man-pages bash-completion htop python git tree wget curl which inetutils dhcpcd iproute2 archlinux32-keyring \
-  xorg-server xorg-xinit xorg-xset xorg-xrandr xorg-xdpyinfo xf86-video-fbdev xf86-input-libinput xfce4 mousepad ristretto ttf-dejavu adwaita-icon-theme
+  xorg-server xorg-xinit xorg-xset xorg-xrandr xorg-xdpyinfo xorg-xrefresh xf86-input-libinput xfce4 mousepad ristretto ttf-dejavu adwaita-icon-theme
 cp /tmp/pacman32.conf "$R/etc/pacman.conf"; cp /tmp/mirrorlist32 "$R/etc/pacman.d/mirrorlist"
 sed -i 's#Include = /tmp/mirrorlist32#Include = /etc/pacman.d/mirrorlist#' "$R/etc/pacman.conf"
 for p in fastfetch xfce4-taskmanager xfce4-screenshooter galculator gnome-themes-extra netsurf dillo unzip zip cowsay; do arch-chroot "$R" pacman -S --noconfirm --needed "$p" >/dev/null 2>&1 && echo "added $p" || echo "skipped $p"; done

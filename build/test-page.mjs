@@ -22,7 +22,7 @@ async function serial(cmd, marker, ms = 60000) {
 async function boot(label) {
   await page.goto(URL);
   await page.waitForFunction(() => window.__os && __os.booted && __os.ready, null, { timeout: 300000 });
-  await page.waitForTimeout(8000);
+  await page.waitForTimeout(25000);
   console.log(`== ${label}: up at ${secs()}, status "${await page.textContent("#stat")}", screen`, JSON.stringify(await stats()));
 }
 try {

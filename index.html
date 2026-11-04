@@ -123,8 +123,11 @@ table{border-collapse:collapse;width:100%;font-size:13px}td{padding:2px 0;vertic
   addEventListener('keydown', function (e) { if (e.ctrlKey && e.altKey && e.code === 'KeyM') { toggleMenu(); e.preventDefault(); e.stopPropagation(); } }, true);
   $('bHelp').onclick = function () { $('helpBox').hidden = !$('helpBox').hidden; $('netBox').hidden = true; };
 
+  // A resumed snapshot starts with blank video memory: ask X to repaint everything.
+  function repaint() { if (emu && ready) emu.serial0_send('\nDISPLAY=:0 xrefresh; clear\n'); }
   function up(how) {
     if (booted) return; booted = true;
+    setTimeout(repaint, 800);
     $('load').hidden = true; buttons(); status('running' + (how ? ', ' + how : ''));
     $('hint').hidden = false; setTimeout(function () { $('hint').style.opacity = 0; }, 6000);
   }
@@ -193,7 +196,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}td{padding:2px 0;vertic
     emu.save_state().then(function (st) {
       ready = false;
       return emu.destroy().then(function () { return start({ initial_state: { buffer: st } }); });
-    }).then(function () { toast(net.mode === 'off' ? 'Network off' : 'Network on. Open a terminal and run net-up', 5000); status('running'); })
+    }).then(function () { setTimeout(repaint, 800); toast(net.mode === 'off' ? 'Network off' : 'Network on. Open a terminal and run net-up', 5000); status('running'); })
       .catch(function (e) { toast('Network switch failed: ' + (e && e.message || e), 6000); status('error'); })
       .then(function () { busy = false; buttons(); });
   }
