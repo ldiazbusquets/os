@@ -38,14 +38,18 @@ for p in fastfetch xfce4-taskmanager xfce4-screenshooter galculator gnome-themes
 # Arch Linux 32 published pango/cairo built against fontconfig 2.18 but its repos still carry 2.14,
 # which breaks every GTK app (undefined symbol FcConfigSetDefaultSubstitute). Take the matching
 # fontconfig build from the Arch Linux 32 archive.
-AR=https://archive.archlinux32.org/packages/f/fontconfig/
-FC=$(curl -fsSL --max-time 30 "$AR" | grep -oE 'fontconfig-2:[0-9.]+-[0-9.]+-i686\.pkg\.tar\.zst' | sort -uV | tail -1 || true)
-if [ -n "$FC" ]; then
-  echo "fontconfig from archive: $FC"
-  curl -fsSL -o "$R/root/fc.pkg.tar.zst" "$AR${FC//:/%3A}" && arch-chroot "$R" pacman -U --noconfirm /root/fc.pkg.tar.zst; rm -f "$R/root/fc.pkg.tar.zst"
-else echo "::warning::could not find fontconfig in the Arch Linux 32 archive"; fi
+FC="fontconfig-2:2.18.3-2.0-i686.pkg.tar.zst"
+for u in "${OK[0]}/pool/" "${OK[1]:-${OK[0]}}/pool/" https://archive.archlinux32.org/packages/f/fontconfig/; do
+  if curl -fsSL --retry 3 --max-time 120 -o "$R/root/fc.pkg.tar.zst" "$u${FC//:/%3A}"; then echo "fontconfig from $u$FC"; break; fi
+done
+if [ -s "$R/root/fc.pkg.tar.zst" ]; then arch-chroot "$R" pacman -U --noconfirm /root/fc.pkg.tar.zst; else echo "::warning::could not download $FC"; fi
+rm -f "$R/root/fc.pkg.tar.zst"
+# librsvg (SVG icons) still links the old libxml2.so.2
+arch-chroot "$R" pacman -S --noconfirm --needed libxml2-legacy >/dev/null 2>&1 && echo "added libxml2-legacy" || echo "::warning::no libxml2-legacy"
+arch-chroot "$R" bash -c 'gtk-query-immodules-3.0 --update-cache; gdk-pixbuf-query-loaders --update-cache; fc-cache -f' >/dev/null 2>&1 || true
 
 # Catch library mismatches at build time instead of as a blank screen.
+arch-chroot "$R" bash -c 'for f in /usr/bin/* /usr/lib/*.so* /usr/lib/gdk-pixbuf-2.0/2.10.0/loaders/*.so /usr/lib/gtk-3.0/3.0.0/*/*.so; do [ -f "$f" ] && ldd "$f" 2>/dev/null | grep "not found"; done | sort | uniq -c | sort -rn | head -20 | sed "s/^/missing lib: /"'
 arch-chroot "$R" bash -c 'for b in /usr/bin/xfce4-session /usr/bin/xfwm4 /usr/bin/xfce4-panel /usr/bin/xfdesktop /usr/bin/thunar /usr/bin/xfce4-terminal /usr/bin/mousepad /usr/bin/ristretto /usr/bin/xfce4-appfinder /usr/bin/xfsettingsd /usr/bin/dillo /usr/bin/galculator /usr/lib/libgtk-3.so.0 /usr/lib/libpangoft2-1.0.so.0 /usr/lib/libcairo.so.2; do [ -e "$b" ] || { echo "abi: missing $b"; continue; }; u=$(ldd -r "$b" 2>&1 | grep -E "undefined symbol|not found" | head -3); [ -n "$u" ] && echo "abi: $b: $u" || echo "abi: ok $b"; done'
 
 # overlay files and system setup
